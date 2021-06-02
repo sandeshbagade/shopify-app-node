@@ -6,9 +6,11 @@ const {default: createShopifyAuth} = require('@shopify/koa-shopify-auth');
 const {verifyRequest} = require('@shopify/koa-shopify-auth');
 const {default: Shopify, ApiVersion} = require('@shopify/shopify-api');
 const Router = require('koa-router');
+const {receiveWebhook, registerWebhook}  =  require('@shopify/koa-shopify-webhooks');
+
 
 dotenv.config();
-
+let sp;
 Shopify.Context.initialize({
   API_KEY: process.env.SHOPIFY_API_KEY,
   API_SECRET_KEY: process.env.SHOPIFY_API_SECRET,
@@ -33,18 +35,72 @@ app.prepare().then(() => {
 
   server.use(
     createShopifyAuth({
-      afterAuth(ctx) {
-        const {shop, scope} = ctx.state.shopify;
-        ACTIVE_SHOPIFY_SHOPS[shop] = scope;
+       accessMode: 'offline',
+        async afterAuth(ctx) {
+           const {shop, scope, accessToken} = ctx.state.shopify;
+           console.log(accessToken)
+           ACTIVE_SHOPIFY_SHOPS[shop] = scope;
+          //  const registration = await registerWebhook({
+          //    shop,
+          //    accessToken,
+          //    address: 'https://37844cbd12c4.ngrok.io/webhooks',
+          //    topic: 'ORDERS_CREATE',
+          //    apiVersion: ApiVersion.October20,
+          //    webhookHandler: (_topic, shop, _body) => {
+          //      console.log('ORDERS_CREATE');
+          //    },
+          //  });
+   
+          //  if (registration.success) {
+          //    console.log('Successfully registered webhook!');
+          //  } else {
+          //    console.log('Failed to register webhook', registration.result.data.webhookSubscriptionCreate.userErrors);
+          //  }
+           ctx.redirect(`/?shop=${shop}`);
+         },
+      
 
-        ctx.redirect(`/?shop=${shop}`);
-      },
     }),
-  );
+  )
+ 
 
   router.post("/graphql", verifyRequest({returnHeader: true}), async (ctx, next) => {
+    
     await Shopify.Utils.graphqlProxy(ctx.req, ctx.res);
   });
+  server.use(
+    // receive webhooks
+    receiveWebhook({
+      path: '/webhooks',
+      secret: Shopify.Context.API_SECRET_KEY,
+      // called when a valid webhook is received
+      onReceived(ctx) {
+        console.log("domain:"+ctx.state.webhook.domain)
+        console.log("id:"+`${JSON.stringify(ctx.state.webhook.payload.admin_graphql_api_id.toString())}`)
+
+        async function s(){  
+          const client = new Shopify.Clients.Graphql(ctx.state.webhook.domain,'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');
+          console.log(client)
+          const response = await client.query({
+            data: `mutation tagsAdd {
+              tagsAdd(id: ${JSON.stringify(ctx.state.webhook.payload.admin_graphql_api_id.toString())}, tags: [
+                "Sandesh"
+              ]) {
+                node {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }`,  
+          })
+          console.log(response.body.errors)
+        }
+        s();
+      },
+    }))
 
   const handleRequest = async (ctx) => {
     await handle(ctx.req, ctx.res);
