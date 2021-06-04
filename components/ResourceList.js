@@ -1,8 +1,7 @@
 import React from 'react';
 import gql from 'graphql-tag';
 import { Query } from 'react-apollo';
-import { Context } from '@shopify/app-bridge-react';
-import moment, { utc } from 'moment'
+  import moment from 'moment'
 import OrderTable from './table'
 
 const GET_PRODUCTS_BY_ID = gql`
@@ -78,7 +77,7 @@ query getProducts($ids: [ID!]!) {
 
 const GET_CJ = gql`
 query {
-  orders(last:10, query:"tag:opaEmail") {
+  orders(first:10, query:"tag:opaEmail") {
     edges {
       node {
         id
@@ -125,14 +124,13 @@ query {
 }`
 ;
 class ResourceListWithProducts extends React.Component {
-  static contextType = Context;
 
   render() {
 
     return (
       <Query query={GET_CJ}>
         {({ data, loading, error }) => {
-          console.log(data)
+          console.log(data, loading, error )
           const rows = []
           if (loading) return <div>Loading…...</div>;
           if (error) return <div>{error.message}</div>;
@@ -143,7 +141,7 @@ class ResourceListWithProducts extends React.Component {
               i+1,
               moment(cjs.firstVisit?.occurredAt).utc().local().format('MMMM Do YYYY, [\n] h:mm:ss a'),
               moment(cjs.lastVisit?.occurredAt).utc().local().format('MMMM Do YYYY, [\n] h:mm:ss a'),
-              (cjs.firstVisit?.utmParameters?.source||cjs.lastVisit?.utmParameters?.source||''),
+              (v.tags.join(', ')||''),
               cjs.daysToConversion|| 0,
               v.discountCode,
             ])
@@ -151,7 +149,7 @@ class ResourceListWithProducts extends React.Component {
            })
           return (
             <div>
-              <OrderTable data={rows}/>hiiidsss
+              <OrderTable data={rows}/>
               {/* <pre>{JSON.stringify(data,null, 2)}</pre> */}
             </div>
           );

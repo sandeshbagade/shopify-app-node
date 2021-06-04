@@ -17,7 +17,7 @@ export default function OrderTable({data}) {
               '',
               'First Visit',
               'Last Visit',
-              'UTM Parameter',
+              'Tags',
               'Days To Conversion',
               'Discount Code',
             ]}

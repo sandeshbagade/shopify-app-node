@@ -35,11 +35,20 @@ app.prepare().then(() => {
 
   server.use(
     createShopifyAuth({
-       accessMode: 'offline',
+      //  accessMode: 'offline',
         async afterAuth(ctx) {
            const {shop, scope, accessToken} = ctx.state.shopify;
-           console.log(accessToken)
            ACTIVE_SHOPIFY_SHOPS[shop] = scope;
+           ctx.cookies.set('shopOrigin', shop, {
+            httpOnly: false,
+            secure: true,
+            sameSite: 'none'
+            });
+            ctx.cookies.set('accessToken', accessToken, {
+              httpOnly: false,
+              secure: true,
+              sameSite: 'none'
+          });
           //  const registration = await registerWebhook({
           //    shop,
           //    accessToken,
@@ -68,6 +77,57 @@ app.prepare().then(() => {
     
     await Shopify.Utils.graphqlProxy(ctx.req, ctx.res);
   });
+  router.get('/api/:object', async (ctx) => {
+    try {
+      console.log(ctx)
+      const results = await fetch("https://" +"sandeshbagade.myshopify.com" + "/admin/api/2020-10/" + ctx.params.object + ".json", {
+        headers: {
+          "X-Shopify-Access-Token": ctx.cookies.get('accessToken'),
+        },
+      })
+      .then(response => response.json())
+      .then(json => {
+        return json;
+      });
+      return ctx.body = {
+        status: 'success',
+        data: results
+      };
+    } catch (err) {
+      console.log(err)
+    }
+  })
+  router.post('/api/:object', async (ctx) => {
+    try {
+      console.log(ctx)
+      const results = await fetch("https://" +"sandeshbagade.myshopify.com" + "/admin/api/2020-10/" + ctx.params.object + ".json", {
+        headers: {
+          "X-Shopify-Access-Token": ctx.cookies.get('accessToken'),
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        method:'POST',
+        body:JSON.stringify({
+          "report": {
+            "name": "A UTM Campaign Source app report",
+            "shopify_ql": "SHOW total_visitors, total_sessions OVER day FROM visits WHERE utm_campaign_source == 'opaEmail' SINCE -7d UNTIL today ORDER BY 'day' ASC LIMIT 1000"
+            }
+        })
+      })
+      .then(response => response.json())
+      .then(json => {
+        return json;
+      });
+      console.log('Post')
+      console.log(results)
+      return ctx.body = {
+        status: 'success',
+        body: JSON.stringify(results)
+      };
+    } catch (err) {
+      console.log(err)
+    }
+  })
   server.use(
     // receive webhooks
     receiveWebhook({
@@ -75,12 +135,8 @@ app.prepare().then(() => {
       secret: Shopify.Context.API_SECRET_KEY,
       // called when a valid webhook is received
       onReceived(ctx) {
-        console.log("domain:"+ctx.state.webhook.domain)
-        console.log("id:"+`${JSON.stringify(ctx.state.webhook.payload.admin_graphql_api_id.toString())}`)
-
         async function s(){  
           const client = new Shopify.Clients.Graphql(ctx.state.webhook.domain,'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');
-          console.log(client)
           const response = await client.query({
             data: `mutation tagsAdd {
               tagsAdd(id: ${JSON.stringify(ctx.state.webhook.payload.admin_graphql_api_id.toString())}, tags: [
